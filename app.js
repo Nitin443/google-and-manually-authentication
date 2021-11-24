@@ -1,9 +1,10 @@
-require("dotenv").config(); // adding dotenv config ( it should be declare in top of program)
+//require("dotenv").config(); // adding dotenv config ( it should be declare in top of program)
 const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
-const encrypt = require("mongoose-encryption");
+//const encrypt = require("mongoose-encryption");
+const md5 = require("md5");
 
 const app = express();
 
@@ -20,7 +21,7 @@ const userSchema = new mongoose.Schema({
 
 // encryption method
 // const secret = "Thisisourlittlesecret";   // we remove that secret const from here because now we are using its in .env file.
-userSchema.plugin(encrypt, {secret: process.env.SECRET, encryptionFields: ["password"], excludeFromEncryption: ["email"] });  // encrypt the password in database
+// userSchema.plugin(encrypt, {secret: process.env.SECRET, encryptionFields: ["password"], excludeFromEncryption: ["email"] });  // encrypt the password in database
 
 const User = mongoose.model("User", userSchema);
 
@@ -39,7 +40,7 @@ app.get("/login", function(req, res){
 app.post("/register", function(req, res){
   const newUser = new User({
     email: req.body.username,
-    password: req.body.password
+    password: md5(req.body.password) // using hashing method md5 to hash the password
   });
 
   newUser.save(function(err){
@@ -53,7 +54,7 @@ app.post("/register", function(req, res){
 
 app.post("/login", function(req, res){  // given access secret page to user after login
   const userName = req.body.username;
-  const password = req.body.password;
+  const password = md5(req.body.password) // using hashing method md5 to hash the password then match in database
 
   User.findOne({email: userName}, function(err, foundUser){  // find user name in database that enter user
     //console.log(foundUser);
