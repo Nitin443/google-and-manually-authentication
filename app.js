@@ -1,12 +1,10 @@
-//require("dotenv").config(); // adding dotenv config ( it should be declare in top of program)
 const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
-//const encrypt = require("mongoose-encryption");
-//const md5 = require("md5");
-const bcrypt = require("bcrypt");
-const saltRounds = 10;
+const session = require("express-session");
+const passport = require("passport");
+const passportLocalMongoose = require("passport-local-mongoose");
 
 
 const app = express();
@@ -14,19 +12,32 @@ const app = express();
 app.use(express.static("public"));
 app.set('view engine', 'ejs');
 app.use(bodyParser.urlencoded({extended: true}));
+// set session
+app.use(session({
+  secret: "our little secret",
+  resave: false,
+  saveUninitialized: false
+}));
+// initialized passport and session
+app.use(passport.initialize());
+app.use(passport.session());
 
 mongoose.connect("mongodb://localhost:27017/userDB", {useNewUrlParser: true});
+//mongoose.set("useCreateIndex", true);
 
 const userSchema = new mongoose.Schema({
   email: String,
   password: String
 });
 
-// encryption method
-// const secret = "Thisisourlittlesecret";   // we remove that secret const from here because now we are using its in .env file.
-// userSchema.plugin(encrypt, {secret: process.env.SECRET, encryptionFields: ["password"], excludeFromEncryption: ["email"] });  // encrypt the password in database
+//set plugin
+userSchema.plugin(passportLocalMongoose);
 
 const User = mongoose.model("User", userSchema);
+// set cookies and read cookies
+passport.use(User.createStrategy());
+passport.serializeUser(User.serializeUser());
+passport.deserializeUser(User.deserializeUser());
 
 app.get("/", function(req, res){
   res.render("home");
@@ -41,52 +52,51 @@ app.get("/login", function(req, res){
   res.render("login", {errMsg: "", username: "", password: ""});
 });
 
-app.post("/register", function(req, res){
-
-  bcrypt.hash(req.body.password, saltRounds, function(err, hash) {  // using bcrypt method for hasing
-
-    const newUser = new User({
-      email: req.body.username,
-      password: hash
-    //  password: md5(req.body.password) // using hashing method md5 to hash the password
-    });
-
-    newUser.save(function(err){
-      if(err){
-        console.log(err);
-      }else{
-        res.render("secrets");   // given access secret page to user after registration
-      }
-    });
-  });
+// set secret route
+app.get("/secrets", function(req, res){
+  if(req.isAuthenticated()){
+    res.render("secrets");
+  }else{
+    res.redirect("/login");
+  }
 });
 
-app.post("/login", function(req, res){  // given access secret page to user after login
-  const userName = req.body.username;
-  const password = req.body.password;
-//  const password = md5(req.body.password) // using hashing method md5 to hash the password then match in database
+//set log out route
+app.get("/logout", function(req, res){
+  req.logout();
+  res.redirect("/");
+});
 
-  User.findOne({email: userName}, function(err, foundUser){  // find user name in database that enter user
-    //console.log(foundUser);
+app.post("/register", function(req, res){
+  User.register({username: req.body.username}, req.body.password, function(err, user){
     if(err){
       console.log(err);
-    }else {
-      if(foundUser){
-    //    if(foundUser.password === password){  // if user name found then check password that enter by user if password correct then access to secret page
-    bcrypt.compare(password, foundUser.password, function(err, result) {  // using bcrypt method to compare password
-       if(result == true){
-       res.render("secrets");
-
-     }else{  //  password wrong then show this msg to user and render to login page
-        res.render("login", {errMsg: "Password incorrect", username: userName, password: password});
-   }
- });  // closing tag to bcrypt function
- }else{  // if user not found then show this err msg to user and render to login page
-       res.render("login", {errMsg: "Email or password incorrect", username: userName, password: password});
- }
-}
+      res.redirect("/register");
+    }else{
+      passport.authenticate("local")(req, res, function(){
+        res.redirect("/secrets");
+      });
+    }
+  });
 
 });
+
+app.post("/login", function(req, res){
+  const user = new User({
+    username: req.body.username,
+    password: req.body.password
+  });
+
+  req.login(user, function(err){
+    if(err){
+      console.log(err);
+    }else{
+      passport.authenticate("local")(req, res, function(){
+        res.redirect("/secrets");
+      });
+    }
+  });
+
 });
 
 app.listen(3000, function(){
