@@ -4,7 +4,10 @@ const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
 //const encrypt = require("mongoose-encryption");
-const md5 = require("md5");
+//const md5 = require("md5");
+const bcrypt = require("bcrypt");
+const saltRounds = 10;
+
 
 const app = express();
 
@@ -27,6 +30,7 @@ const User = mongoose.model("User", userSchema);
 
 app.get("/", function(req, res){
   res.render("home");
+
 });
 
 app.get("/register", function(req, res){
@@ -38,23 +42,29 @@ app.get("/login", function(req, res){
 });
 
 app.post("/register", function(req, res){
-  const newUser = new User({
-    email: req.body.username,
-    password: md5(req.body.password) // using hashing method md5 to hash the password
-  });
 
-  newUser.save(function(err){
-    if(err){
-      console.log(err);
-    }else{
-      res.render("secrets");   // given access secret page to user after registration
-    }
+  bcrypt.hash(req.body.password, saltRounds, function(err, hash) {  // using bcrypt method for hasing
+
+    const newUser = new User({
+      email: req.body.username,
+      password: hash
+    //  password: md5(req.body.password) // using hashing method md5 to hash the password
+    });
+
+    newUser.save(function(err){
+      if(err){
+        console.log(err);
+      }else{
+        res.render("secrets");   // given access secret page to user after registration
+      }
+    });
   });
 });
 
 app.post("/login", function(req, res){  // given access secret page to user after login
   const userName = req.body.username;
-  const password = md5(req.body.password) // using hashing method md5 to hash the password then match in database
+  const password = req.body.password;
+//  const password = md5(req.body.password) // using hashing method md5 to hash the password then match in database
 
   User.findOne({email: userName}, function(err, foundUser){  // find user name in database that enter user
     //console.log(foundUser);
@@ -62,16 +72,21 @@ app.post("/login", function(req, res){  // given access secret page to user afte
       console.log(err);
     }else {
       if(foundUser){
-        if(foundUser.password === password){  // if user name found then check password that enter by user if password correct then access to secret page
-          res.render("secrets");
-        }else{  //  password wrong then show this msg to user and render to login page
-             res.render("login", {errMsg: "Password incorrect", username: userName, password: password});
-        }
-      }else{  // if user not found then show this err msg to user and render to login page
-            res.render("login", {errMsg: "Email or password incorrect", username: userName, password: password});
-      }
-    }
-  });
+    //    if(foundUser.password === password){  // if user name found then check password that enter by user if password correct then access to secret page
+    bcrypt.compare(password, foundUser.password, function(err, result) {  // using bcrypt method to compare password
+       if(result == true){
+       res.render("secrets");
+
+     }else{  //  password wrong then show this msg to user and render to login page
+        res.render("login", {errMsg: "Password incorrect", username: userName, password: password});
+   }
+ });  // closing tag to bcrypt function
+ }else{  // if user not found then show this err msg to user and render to login page
+       res.render("login", {errMsg: "Email or password incorrect", username: userName, password: password});
+ }
+}
+
+});
 });
 
 app.listen(3000, function(){
