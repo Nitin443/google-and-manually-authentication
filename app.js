@@ -32,7 +32,8 @@ mongoose.connect("mongodb://localhost:27017/userDB", {useNewUrlParser: true});
 const userSchema = new mongoose.Schema({
   email: String,
   password: String,
-  googleId: String
+  googleId: String,
+  secret: String
 });
 
 //set plugin
@@ -95,11 +96,43 @@ app.get("/login", function(req, res){
 
 // set secret route
 app.get("/secrets", function(req, res){
+User.find({"secret": {$ne: null}}, function(err, foundUsers){
+  if(err){
+    console.log(err);
+  }else{
+    if(foundUsers){
+      res.render("secrets", {usersWithSecrets: foundUsers});
+    }
+  }
+});
+});
+
+// set subit get route
+app.get("/submit", function(req, res){
   if(req.isAuthenticated()){
-    res.render("secrets");
+    res.render("submit");
   }else{
     res.redirect("/login");
   }
+});
+
+// set submit post route
+app.post("/submit", function(req, res){
+  const submittedSecret = req.body.secret;
+
+  console.log(req.user._id);   // it is passport function so we are access id by user._id
+  User.findById(req.user._id, function(err, foundUser){
+    if(err){
+      console.log(err);
+    }else{
+      if(foundUser){
+        foundUser.secret = submittedSecret;
+        foundUser.save(function(){
+          res.redirect("/secrets");
+        });
+      }
+    }
+  });
 });
 
 //set log out route
